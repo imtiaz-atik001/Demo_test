@@ -92,6 +92,16 @@ npm run stress -- 3 30 200
 
 Arguments = `<workers> <conversations> <messagesPerConversation>`.
 
+### 6) End-of-run consumer table
+
+Generate a table with per-consumer message count and conversation list:
+
+```bash
+npm run report:consumers
+```
+
+This also saves the table to `consumer-logs/summary-table.txt`.
+
 ## Scaling guidance
 
 ### Horizontal scaling

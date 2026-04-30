@@ -61,6 +61,8 @@ async function main(): Promise<void> {
     worker.kill('SIGINT');
   }
 
+  await run('npm', ['run', 'report:consumers'], 'consumer-report');
+
   console.log('[stress] completed');
 }
 

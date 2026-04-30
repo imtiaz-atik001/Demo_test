@@ -9,6 +9,7 @@
     "start:dev": "tsx watch src/main.ts",
     "worker": "tsx watch src/worker/runner.ts",
     "simulate:produce": "tsx src/simulator/load-generator.ts",
+    "report:consumers": "tsx src/simulator/consumer-report.ts",
     "stress": "tsx src/simulator/stress-runner.ts",
     "worker:1": "npm run worker -- worker-1",
     "worker:2": "npm run worker -- worker-2",

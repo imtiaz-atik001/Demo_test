@@ -1,5 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { appendFile, mkdir } from 'node:fs/promises';
+import { appendFile, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   Consumer,
@@ -45,6 +45,7 @@ export class ConversationWorkerService implements OnModuleInit, OnModuleDestroy 
 
   async onModuleInit(): Promise<void> {
     await this.ensureConsumerLogDirectory();
+    await this.resetConsumerLogFile();
     await this.ensureTopics();
 
     await this.producer.connect();
@@ -220,6 +221,11 @@ export class ConversationWorkerService implements OnModuleInit, OnModuleDestroy 
 
   private async ensureConsumerLogDirectory(): Promise<void> {
     await mkdir(join(process.cwd(), 'consumer-logs'), { recursive: true });
+  }
+
+  private async resetConsumerLogFile(): Promise<void> {
+    const header = `${new Date().toISOString()} START worker=${config.workerId}\n`;
+    await writeFile(this.consumerLogPath, header, 'utf8');
   }
 
   private async writeConsumerLog(entry: string): Promise<void> {
