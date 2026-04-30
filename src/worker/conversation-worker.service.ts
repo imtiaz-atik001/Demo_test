@@ -78,6 +78,38 @@ export class ConversationWorkerService implements OnModuleInit, OnModuleDestroy 
         topics,
         timeout: 15000
       });
+
+      const topicNames = topics.map((topicConfig) => topicConfig.topic);
+      const metadata = await admin.fetchTopicMetadata({ topics: topicNames });
+
+      const partitionsToIncrease = metadata.topics
+        .map((topicMeta) => {
+          const currentPartitions = topicMeta.partitions.length;
+          if (currentPartitions >= config.partitions) {
+            return undefined;
+          }
+
+          return {
+            topic: topicMeta.name,
+            count: config.partitions
+          };
+        })
+        .filter(
+          (topicConfig): topicConfig is { topic: string; count: number } => topicConfig !== undefined
+        );
+
+      if (partitionsToIncrease.length > 0) {
+        await admin.createPartitions({
+          topicPartitions: partitionsToIncrease,
+          timeout: 15000
+        });
+
+        this.logger.warn(
+          `Increased topic partitions to ${config.partitions} for: ${partitionsToIncrease
+            .map((entry) => entry.topic)
+            .join(', ')}`
+        );
+      }
     } finally {
       await admin.disconnect();
     }

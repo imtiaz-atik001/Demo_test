@@ -4,4 +4,8 @@ if (workerIdArg && workerIdArg.trim().length > 0) {
   process.env.WORKER_ID = workerIdArg.trim();
 }
 
-await import('../main.js');
+async function run(): Promise<void> {
+  await import('../main.js');
+}
+
+void run();

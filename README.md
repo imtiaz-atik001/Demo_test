@@ -25,9 +25,12 @@ BullMQ is excellent for job queues and delayed jobs, but for strict partitioned 
 - Main topic: `conversation.events`
 - Retry topics: `conversation.events.retry.1s`, `conversation.events.retry.5s`
 - DLQ topic: `conversation.events.dlq`
+- Partition count target: `100` (configurable via `PARTITIONS`)
 - Partition key: `conversationId`
 - Consumer group: `conversation-worker-group`
 - Manual commit (`autoCommit=false`) = ACK occurs after successful handling or controlled reroute
+
+At startup, the worker creates missing topics and also increases existing topic partitions up to the configured `PARTITIONS` value.
 
 Flow:
 1. Worker consumes event from main topic.
@@ -61,9 +64,16 @@ npm install
 Open separate terminals and run:
 
 ```bash
-npm run worker:1
-npm run worker:2
-npm run worker:3
+npm run worker -- worker-1
+npm run worker -- worker-2
+npm run worker -- worker-3
+```
+
+You can start as many workers as you want:
+
+```bash
+npm run worker -- worker-4
+npm run worker -- worker-5
 ```
 
 ### 4) Produce demo load
