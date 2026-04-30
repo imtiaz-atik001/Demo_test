@@ -1,4 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { appendFile, mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
 import {
   Consumer,
   EachMessagePayload,
@@ -18,6 +20,11 @@ const RETRY_DELAY_BY_TOPIC: Record<string, number> = {
 @Injectable()
 export class ConversationWorkerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ConversationWorkerService.name);
+  private readonly consumerLogPath = join(
+    process.cwd(),
+    'consumer-logs',
+    `${this.toSafeFileName(config.workerId)}.txt`
+  );
   private readonly kafka = new Kafka({
     brokers: config.kafkaBrokers,
     clientId: config.kafkaClientId,
@@ -37,6 +44,7 @@ export class ConversationWorkerService implements OnModuleInit, OnModuleDestroy 
   private readonly processedByConversation = new Map<string, number>();
 
   async onModuleInit(): Promise<void> {
+    await this.ensureConsumerLogDirectory();
     await this.ensureTopics();
 
     await this.producer.connect();
@@ -125,6 +133,10 @@ export class ConversationWorkerService implements OnModuleInit, OnModuleDestroy 
     const retryHeader = message.headers?.retryMeta;
     const retryMeta = this.parseRetryMeta(this.normalizeHeaderValue(retryHeader));
 
+    await this.writeConsumerLog(
+      `CONSUMED worker=${config.workerId} topic=${topic} partition=${partition} conv=${event.conversationId} seq=${event.sequence} offset=${message.offset} attempt=${retryMeta.attempt}`
+    );
+
     const ownerInfo = `worker=${config.workerId} topic=${topic} partition=${partition} conv=${event.conversationId} seq=${event.sequence} offset=${message.offset}`;
 
     try {
@@ -138,6 +150,9 @@ export class ConversationWorkerService implements OnModuleInit, OnModuleDestroy 
       this.processedByConversation.set(event.conversationId, total);
 
       this.logger.log(`ACK ${ownerInfo} processedCount=${total} attempt=${retryMeta.attempt}`);
+      await this.writeConsumerLog(
+        `ACK worker=${config.workerId} topic=${topic} partition=${partition} conv=${event.conversationId} seq=${event.sequence} offset=${message.offset} attempt=${retryMeta.attempt}`
+      );
       await this.commitOffset(topic, partition, message.offset);
       await heartbeat();
     } catch (error) {
@@ -166,6 +181,9 @@ export class ConversationWorkerService implements OnModuleInit, OnModuleDestroy 
         });
 
         this.logger.error(`DLQ ${ownerInfo} attempt=${nextAttempt} reason=${err.message}`);
+        await this.writeConsumerLog(
+          `DLQ worker=${config.workerId} topic=${topic} partition=${partition} conv=${event.conversationId} seq=${event.sequence} offset=${message.offset} attempt=${nextAttempt} reason=${err.message}`
+        );
         await this.commitOffset(topic, partition, message.offset);
         return;
       }
@@ -193,8 +211,24 @@ export class ConversationWorkerService implements OnModuleInit, OnModuleDestroy 
       });
 
       this.logger.warn(`NACK ${ownerInfo} attempt=${nextAttempt} routedTo=${retryTopic} reason=${err.message}`);
+      await this.writeConsumerLog(
+        `NACK worker=${config.workerId} topic=${topic} partition=${partition} conv=${event.conversationId} seq=${event.sequence} offset=${message.offset} attempt=${nextAttempt} retryTopic=${retryTopic} reason=${err.message}`
+      );
       await this.commitOffset(topic, partition, message.offset);
     }
+  }
+
+  private async ensureConsumerLogDirectory(): Promise<void> {
+    await mkdir(join(process.cwd(), 'consumer-logs'), { recursive: true });
+  }
+
+  private async writeConsumerLog(entry: string): Promise<void> {
+    const line = `${new Date().toISOString()} ${entry}\n`;
+    await appendFile(this.consumerLogPath, line, 'utf8');
+  }
+
+  private toSafeFileName(value: string): string {
+    return value.replace(/[^a-zA-Z0-9-_]/g, '_');
   }
 
   private parseRetryMeta(raw?: Buffer): RetryMeta {
